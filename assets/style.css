@@ -86,4 +86,4 @@ table.data th { position: sticky; top: 0; background: var(--surface); color: var
 table.data td:first-child, table.data th:first-child { text-align: left; }
 .err { color: var(--up); }
 .xscroll { overflow-x: auto; }
-.xscroll table.mini { min-width: 460px; }
+.xscroll table.mini { min-width: 540px; }

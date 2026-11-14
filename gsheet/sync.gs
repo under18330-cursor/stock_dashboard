@@ -14,7 +14,7 @@ const OHLC = { d: '日期', o: '開', h: '高', l: '低', c: '收', v: '成交�
 const SETS = [
   ['三大法人', 'institutional.json', { d: '日期', foreign: '外資(億)', trust: '投信(億)', dealer: '自營商(億)', total: '合計(億)' }],
   ['期貨未平倉', 'futures_oi.json', { d: '日期', f_net: '外資淨額(口)', f_long: '外資多單', f_short: '外資空單', f_trade_net: '外資當日交易淨額', t_net: '投信淨額', d_net: '自營淨額' }],
-  ['融資', 'margin.json', { d: '日期', tse_buy: '上市買進(張)', tse_sell: '上市賣出', tse_redeem: '上市現償', tse_bal: '上市餘額(張)', tse_amt: '上市金額(億)', otc_buy: '上櫃買進(張)', otc_sell: '上櫃賣出', otc_redeem: '上櫃現償', otc_bal: '上櫃餘額(張)', otc_amt: '上櫃金額(億)' }],
+  ['融資', 'margin.json', { d: '日期', tse_buy: '上市買進(張)', tse_sell: '上市賣出', tse_redeem: '上市現償', tse_bal: '上市餘額(張)', tse_amt: '上市金額(億)', otc_buy: '上櫃買進(張)', otc_sell: '上櫃賣出', otc_redeem: '上櫃現償', otc_bal: '上櫃餘額(張)', otc_amt: '上櫃金額(億)', tse_mr: '上市維持率(%)', otc_mr: '上櫃維持率(%)' }],
   ['成交金額', 'turnover.json', { d: '日期', amt: '成交金額(億)', shares: '成交股數(億股)' }],
   ['台股恐懼貪婪', 'twn_fear.json', { d: '日期', score: '指數', rating: '評等', momentum: '動能', vix: '波動率', pcr: 'P/C比', fut: '外資期貨', spot10: '外資現貨10日', margin: '融資變化' }],
   ['CNN恐懼貪婪', 'cnn_fear_greed.json', { d: '日期', score: '指數', rating: '評等' }],

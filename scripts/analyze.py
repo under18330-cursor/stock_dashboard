@@ -168,7 +168,8 @@ def build_summary(twn_rows, names):
             return {"buy": m.get(f"{p}_buy"), "sell": m.get(f"{p}_sell"), "redeem": m.get(f"{p}_redeem"),
                     "bal": m[f"{p}_bal"], "chg": m[f"{p}_bal"] - (m.get(f"{p}_prev") or m[f"{p}_bal"]),
                     "chg5d": None if prev5 is None else m[f"{p}_bal"] - prev5,
-                    "amt": m.get(f"{p}_amt"),
+                    "amt": m.get(f"{p}_amt"), "mr": m.get(f"{p}_mr"),
+                    "mr_prev": mar[-2].get(f"{p}_mr"),
                     "amt_chg": rnd((m.get(f"{p}_amt") or 0) - (m.get(f"{p}_amt_prev") or 0))}
         s["margin"] = {"date": m["d"], "tse": side("tse"), "otc": side("otc")}
 
@@ -236,6 +237,10 @@ def rule_based(s):
         txt = f"【融資】上市融資 {sgn(t['chg'], ' 張')}，餘額 {t['bal']:,} 張（{t['amt']:,.0f} 億）"
         if o:
             txt += f"；上櫃 {sgn(o['chg'], ' 張')}，餘額 {o['bal']:,} 張"
+        if t.get("mr"):
+            txt += f"。融資維持率上市 {t['mr']:.1f}%" + (f"、上櫃 {o['mr']:.1f}%" if o and o.get("mr") else "")
+            if t["mr"] < 140:
+                txt += "，已接近 130% 追繳線，留意斷頭賣壓"
         hint = ""
         if tw and (tw["chg1d"] or 0) < 0 and t["chg"] > 0:
             hint = "。指數下跌但融資增加，散戶逢低承接，籌碼偏不安定"
@@ -266,7 +271,7 @@ SYSTEM = """你是台股盤勢分析師，為一位每天早上開盤前與下�
 要求：
 - 只使用資料中的數字，不要編造資料裡沒有的事件或新聞。
 - 重點是解讀數字之間的關係（例如價漲量縮、外資現貨買超但期貨空單增加、指數跌而融資增），不要只複述數字。
-- 金額單位為億元新台幣，期貨為口，融資為張。
+- 金額單位為億元新台幣，期貨為口，融資為張；mr 為大盤融資維持率(%)，低於 130% 會被追繳，越接近代表斷頭賣壓風險越高。
 - 語氣中性精簡，總長 250 字左右。這是資訊整理，不是投資建議，不要給買賣指令。"""
 
 

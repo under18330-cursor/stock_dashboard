@@ -258,18 +258,22 @@ function marginCard(sum, mar) {
   const s = sum?.margin;
   if (!s || !mar?.length) return;
   const row = (n, x) => x ? `<tr><td>${n}</td><td>${fmt(x.buy)}</td><td>${fmt(x.sell)}</td><td>${fmt(x.redeem)}</td>
-    <td class="${cls(x.chg)}"><b>${sgn(x.chg)}</b></td><td>${fmt(x.bal)}</td><td>${fmt(x.amt, 1)}</td><td class="${cls(x.amt_chg)}">${sgn(x.amt_chg, 1)}</td></tr>` : '';
+    <td class="${cls(x.chg)}"><b>${sgn(x.chg)}</b></td><td>${fmt(x.bal)}</td><td>${fmt(x.amt, 1)}</td><td class="${cls(x.amt_chg)}">${sgn(x.amt_chg, 1)}</td>
+    <td><b>${x.mr == null ? '—' : fmt(x.mr, 1) + '%'}</b>${x.mr != null && x.mr_prev != null ? ` <span class="tag">${sgn(x.mr - x.mr_prev, 1)}</span>` : ''}</td></tr>` : '';
   const d = (p) => (r) => r[p + '_bal'] != null && r[p + '_prev'] != null ? r[p + '_bal'] - r[p + '_prev'] : null;
   seriesCard($('#margin'), {
     title: '上市櫃融資', date: s.date,
-    top: `<div class="xscroll"><table class="mini"><thead><tr><th>單位：張</th><th>買進</th><th>賣出</th><th>現償</th><th>增減</th><th>餘額</th><th>金額(億)</th><th>金額增減</th></tr></thead>
+    top: `<div class="xscroll"><table class="mini"><thead><tr><th>單位：張</th><th>買進</th><th>賣出</th><th>現償</th><th>增減</th><th>餘額</th><th>金額(億)</th><th>金額增減</th><th>維持率</th></tr></thead>
       <tbody>${row('上市', s.tse)}${row('上櫃', s.otc)}</tbody></table></div>`,
     views: [
       { label: '上市融資餘額', type: 'line', rows: pick(mar, (r) => r.tse_amt), unit: '億', digits: 1 },
       { label: '上市增減', rows: pick(mar, d('tse')), unit: '張' },
       { label: '上櫃融資餘額', type: 'line', rows: pick(mar, (r) => r.otc_amt), unit: '億', digits: 1 },
       { label: '上櫃增減', rows: pick(mar, d('otc')), unit: '張' },
+      { label: '上市維持率', type: 'line', rows: pick(mar, (r) => r.tse_mr), unit: '%', digits: 1, lines: [130] },
+      { label: '上櫃維持率', type: 'line', rows: pick(mar, (r) => r.otc_mr), unit: '%', digits: 1, lines: [130] },
     ],
+    note: '融資維持率為自行估算：Σ(個股融資餘額 × 收盤價) ÷ 融資餘額金額。個股維持率低於 130% 會被追繳，大盤值越接近 130% 代表斷頭賣壓風險越高。',
   });
 }
 function turnoverCard(sum, to) {

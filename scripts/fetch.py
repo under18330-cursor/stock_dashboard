@@ -437,11 +437,76 @@ def fetch_margin(dates):
     log(f"  融資: +{len(rows)} total {len(out)}")
 
 
+# ---------- 5. 融資維持率（自行計算） ----------
+# 大盤融資維持率 = Σ(個股融資餘額張數 × 1000 × 收盤價) ÷ 融資餘額金額
+def _ratio(bal, close, amt_yi):
+    mv = sum(b * 1000 * close[c] for c, b in bal.items() if b and close.get(c))
+    return round(mv / (amt_yi * 1e8) * 100, 1) if amt_yi and mv else None
+
+
+def tse_maintenance(d, amt_yi):
+    ymd = d.replace("-", "")
+    j = http_json("https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json"
+                  f"&selectType=ALL&date={ymd}", headers=TWSE_H)
+    time.sleep(TWSE_PAUSE)
+    if j.get("stat") != "OK" or len(j.get("tables") or []) < 2:
+        return None
+    bal = {r[0].strip(): num(r[6]) for r in j["tables"][1].get("data") or []}
+    j = http_json("https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json"
+                  f"&type=ALLBUT0999&date={ymd}", headers=TWSE_H)
+    time.sleep(TWSE_PAUSE)
+    close = {}
+    for t in j.get("tables") or []:
+        if "每日收盤行情" in (t.get("title") or ""):
+            close = {r[0].strip(): num(r[8]) for r in t.get("data") or []}
+    return _ratio(bal, close, amt_yi)
+
+
+def otc_maintenance(d, amt_yi):
+    q = d.replace("-", "/")
+    j = http_json(f"https://www.tpex.org.tw/www/zh-tw/margin/balance?response=json&date={q}")
+    t = (j.get("tables") or [{}])[0]
+    if j.get("date") != d.replace("-", "") or not t.get("data"):
+        return None
+    bal = {r[0].strip(): num(r[6]) for r in t["data"]}
+    time.sleep(1.0)
+    j = http_json(f"https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes?response=json&date={q}")
+    t = (j.get("tables") or [{}])[0]
+    close = {r[0].strip(): num(r[2]) for r in t.get("data") or []}
+    time.sleep(1.0)
+    return _ratio(bal, close, amt_yi)
+
+
+def fetch_maintenance(dates):
+    cur = {r["d"]: r for r in load("margin.json")}
+    todo = [d for d in reversed(dates)  # 由新到舊補
+            if d in cur and ("tse_mr" not in cur[d] or "otc_mr" not in cur[d])]
+    rows = []
+    for i, d in enumerate(todo):
+        row = {"d": d}
+        for p, fn in (("otc", otc_maintenance), ("tse", tse_maintenance)):
+            if f"{p}_mr" in cur[d] or not cur[d].get(f"{p}_amt"):
+                continue
+            try:
+                v = fn(d, cur[d][f"{p}_amt"])
+                if v:
+                    row[f"{p}_mr"] = v
+            except RuntimeError as e:
+                log(f"  skip {p} {d}: {e}")
+        if len(row) > 1:
+            rows.append(row)
+        if (i + 1) % 10 == 0:
+            merge_rows("margin.json", rows)
+            log(f"  融資維持率 {i + 1}/{len(todo)}")
+    out = merge_rows("margin.json", rows)
+    log(f"  融資維持率: +{len(rows)} (total rows {len(out)})")
+
+
 # ---------- main ----------
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backfill", action="store_true", help="回補過去一年")
-    ap.add_argument("--only", default="", help="逗號分隔: indices,cnn,vix,pcr,futures,turnover,inst,margin")
+    ap.add_argument("--only", default="", help="逗號分隔: indices,cnn,vix,pcr,futures,turnover,inst,margin,mr")
     a = ap.parse_args()
     only = set(filter(None, a.only.split(",")))
     want = lambda k: not only or k in only
@@ -472,6 +537,7 @@ def main():
     run("turnover", fetch_turnover, a.backfill)
     run("inst", fetch_institutional, dates)
     run("margin", fetch_margin, dates)
+    run("mr", fetch_maintenance, dates)
 
     meta = load("meta.json", {})
     meta["updated"] = dt.datetime.now(TW).strftime("%Y-%m-%d %H:%M")
