@@ -59,7 +59,28 @@ function tabs(el, items, onPick, active = 0) {
 }
 const showLast = (chart, n, total) => chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, total - n) - 0.5, to: total + 1.5 });
 
-/* ---------- 1. 指數 K 線 ---------- */
+/* ---------- 1. 指數 K 線 + 均線 / 布林通道 / BIAS ---------- */
+// 回傳每根 K 的 MA5/10/20、布林上下軌(20, 2σ)、BIAS20(%)
+function indicators(data) {
+  const c = data.map((b) => b.close);
+  const out = { ma5: [], ma10: [], ma20: [], up: [], lo: [], bias: [] };
+  const sma = (i, n) => { let t = 0; for (let k = i - n + 1; k <= i; k++) t += c[k]; return t / n; };
+  data.forEach((b, i) => {
+    if (i >= 4) out.ma5.push({ time: b.time, value: sma(i, 5) });
+    if (i >= 9) out.ma10.push({ time: b.time, value: sma(i, 10) });
+    if (i >= 19) {
+      const m = sma(i, 20);
+      let v = 0;
+      for (let k = i - 19; k <= i; k++) v += (c[k] - m) ** 2;
+      const sd = Math.sqrt(v / 20);
+      out.ma20.push({ time: b.time, value: m });
+      out.up.push({ time: b.time, value: m + 2 * sd });
+      out.lo.push({ time: b.time, value: m - 2 * sd });
+      out.bias.push({ time: b.time, value: (c[i] - m) / m * 100 });
+    }
+  });
+  return out;
+}
 function indexCard(root, key, daily, intra) {
   const last = daily[daily.length - 1], prev = daily[daily.length - 2];
   const diff = last.c - prev.c, pct = diff / prev.c * 100;
@@ -71,45 +92,98 @@ function indexCard(root, key, daily, intra) {
         <div class="price"><span class="v">${fmt(last.c, 2)}</span>
           <span class="${cls(diff)}">${diff > 0 ? '▲' : diff < 0 ? '▼' : ''} ${fmt(Math.abs(diff), 2)}（${sgn(pct, 2)}%）</span>
           <span class="tag">${last.d.replaceAll('-', '/')}</span></div></div>
-      <div class="tabs"></div>
+      <div class="tabs range"></div>
+    </div>
+    <div class="tabs toggles">
+      <button type="button" data-k="ma" aria-pressed="true">均線</button>
+      <button type="button" data-k="bb" aria-pressed="true">布林通道</button>
+      <button type="button" data-k="bias" aria-pressed="true">BIAS 20</button>
     </div>
     <div class="legend"></div>
+    <div class="legend ind"></div>
     <div class="chart tall"></div>`;
   root.appendChild(card);
-  const legend = $('.legend', card);
-  let chart, series;
+  const legend = $('.legend', card), legend2 = $('.legend.ind', card);
+  const on = { ma: true, bb: true, bias: true };
+  let chart, cur = 3;
   const off = intra?.gmtoffset || 0;
   const bars = (arr) => arr.map(([t, o, h, l, c]) => ({ time: t + off, open: o, high: h, low: l, close: c }));
   const dailyBars = daily.map((r) => ({ time: r.d, open: r.o, high: r.h, low: r.l, close: r.c }));
-  const defLegend = '<span class="tag">移到圖上看開高低收；可拖曳、縮放</span>';
+  const sw = (v) => `<i class="sw" style="background:var(${v})"></i>`;
 
   function draw(i) {
+    cur = i;
     if (chart) { charts.splice(charts.indexOf(chart), 1); chart.remove(); }
-    const el = $('.chart', card);
     const isIntra = i < 3 && !!intra;
-    chart = makeChart(el, isIntra);
-    series = chart.addCandlestickSeries(candleOpts());
-    let data = dailyBars, show = 250;
+    chart = makeChart($('.chart', card), isIntra);
+    // 指標用完整序列計算（均線需要前 20 根暖身），再裁成要顯示的區間
+    let full = dailyBars, from = null, show = 250;
     if (isIntra) {
-      if (i === 0) {  // 1D：最近一個交易日的 5 分 K
-        const all = bars(intra.m5);
+      full = bars(i === 2 ? intra.h1 : intra.m5);
+      if (i === 0) {  // 1D：最近一個交易日
         const day = (b) => Math.floor(b.time / 86400);
-        data = all.filter((b) => day(b) === day(all[all.length - 1]));
-      } else if (i === 1) data = bars(intra.m5);
-      else data = bars(intra.h1);
-      show = data.length;
+        from = full.find((b) => day(b) === day(full[full.length - 1])).time;
+      }
     }
+    const ind = indicators(full);
+    const cut = (arr) => from == null ? arr : arr.filter((r) => r.time >= from);
+    const data = cut(full);
+    const low = on.bias ? 0.26 : 0.06;
+    const series = chart.addCandlestickSeries(candleOpts());
+    series.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: low } });
     series.setData(data);
+    const line = (rows, color, opt = {}) => {
+      const s = chart.addLineSeries({ color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false, ...opt });
+      s.setData(cut(rows));
+      return s;
+    };
+    const S = {};
+    if (on.bb) {
+      S.up = line(ind.up, css('--bb'), { lineStyle: 2 });
+      S.lo = line(ind.lo, css('--bb'), { lineStyle: 2 });
+    }
+    if (on.ma) {
+      S.ma5 = line(ind.ma5, css('--ma5'));
+      S.ma10 = line(ind.ma10, css('--ma10'));
+      S.ma20 = line(ind.ma20, css('--ma20'), { lineWidth: 2 });
+    }
+    if (on.bias) {  // 獨立刻度，畫在下方 20% 的副圖
+      S.bias = chart.addHistogramSeries({ priceScaleId: 'bias', priceLineVisible: false, lastValueVisible: false,
+        priceFormat: { type: 'custom', minMove: 0.01, formatter: (x) => x.toFixed(1) + '%' } });
+      chart.priceScale('bias').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+      S.bias.setData(cut(ind.bias).map((r) => ({ ...r, color: r.value >= 0 ? css('--up') : css('--down') })));
+    }
     if (isIntra) chart.timeScale().fitContent(); else showLast(chart, show, data.length);
-    legend.innerHTML = defLegend;
+
+    const lastOf = (rows) => { const r = cut(rows); return r.length ? r[r.length - 1].value : null; };
+    const paint = (t, b, v) => {
+      const c = cls(b.close - b.open);
+      legend.innerHTML = `<b>${dateOf(t)}</b>　開 ${fmt(b.open, 2)}　高 ${fmt(b.high, 2)}　低 ${fmt(b.low, 2)}　收 <b class="${c}">${fmt(b.close, 2)}</b>`;
+      const parts = [];
+      if (on.ma) parts.push(`${sw('--ma5')}MA5 <b>${fmt(v.ma5, 0)}</b>`, `${sw('--ma10')}MA10 <b>${fmt(v.ma10, 0)}</b>`, `${sw('--ma20')}MA20 <b>${fmt(v.ma20, 0)}</b>`);
+      if (on.bb) parts.push(`${sw('--bb')}布林 <b>${fmt(v.lo, 0)} ~ ${fmt(v.up, 0)}</b>`);
+      if (on.bias) parts.push(`BIAS20 <b class="${cls(v.bias)}">${v.bias == null ? '—' : sgn(v.bias, 2) + '%'}</b>`);
+      legend2.innerHTML = parts.join('　');
+    };
+    const def = () => paint(data[data.length - 1].time, data[data.length - 1],
+      { ma5: lastOf(ind.ma5), ma10: lastOf(ind.ma10), ma20: lastOf(ind.ma20), up: lastOf(ind.up), lo: lastOf(ind.lo), bias: lastOf(ind.bias) });
+    def();
     chart.subscribeCrosshairMove((p) => {
       const b = p.time && p.seriesData.get(series);
-      if (!b) { legend.innerHTML = defLegend; return; }
-      const c = cls(b.close - b.open);
-      legend.innerHTML = `<b>${dateOf(p.time)}</b>　開 ${fmt(b.open, 2)}　高 ${fmt(b.high, 2)}　低 ${fmt(b.low, 2)}　收 <b class="${c}">${fmt(b.close, 2)}</b>`;
+      if (!b) return def();
+      const g = (k) => (S[k] && p.seriesData.get(S[k]) ? p.seriesData.get(S[k]).value : null);
+      paint(p.time, b, { ma5: g('ma5'), ma10: g('ma10'), ma20: g('ma20'), up: g('up'), lo: g('lo'), bias: g('bias') });
     });
   }
-  tabs($('.tabs', card), ['1D', '5D', '1M', '1Y'], draw, 3);
+  tabs($('.tabs.range', card), ['1D', '5D', '1M', '1Y'], draw, 3);
+  $('.toggles', card).addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    on[b.dataset.k] = !on[b.dataset.k];
+    b.setAttribute('aria-pressed', on[b.dataset.k]);
+    draw(cur);
+  });
   draw(3);
 }
 
