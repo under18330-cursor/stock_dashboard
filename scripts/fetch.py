@@ -477,7 +477,31 @@ def otc_maintenance(d, amt_yi):
     return _ratio(bal, close, amt_yi)
 
 
+def kgi_maintenance():
+    """凱基證券「大盤動態 > 信用交易」所用的 MoneyDJ 資料，一次回傳約 300 個交易日。"""
+    base = "https://kgiweb.moneydj.com/b2brwdCommon/jsondata/c6/fb/f2/twstockdata.xdjjson"
+    by = {}
+    for tag, key in (("afterHours-market0002-1", "tse_mr"), ("afterHours-market0002-2", "otc_mr")):
+        j = http_json(f"{base}?x={tag}&b=d&c=300", retries=2,
+                      headers={"Referer": "https://kgiweb.moneydj.com/b2brwd/page/afterhours/market/0002"})
+        for r in (j.get("ResultSet") or {}).get("Result") or []:
+            v = num(r.get("V6"))
+            if v:
+                d = r["V1"].replace("/", "-")
+                by.setdefault(d, {"d": d})[key] = v
+        time.sleep(1)
+    return list(by.values())
+
+
 def fetch_maintenance(dates):
+    have = {r["d"] for r in load("margin.json")}
+    try:  # 優先用凱基/MoneyDJ 的現成數字；只寫入 margin.json 已有的日期
+        rows = [r for r in kgi_maintenance() if r["d"] in have]
+        merge_rows("margin.json", rows)
+        log(f"  融資維持率 (KGI): {len(rows)} 日")
+    except Exception as e:
+        log(f"  KGI 來源失敗，改為自行計算: {e}")
+    dates = dates[-3:]  # 備援：僅自行計算最近幾日（證交所有頻率限制）
     cur = {r["d"]: r for r in load("margin.json")}
     todo = [d for d in reversed(dates)  # 由新到舊補
             if d in cur and ("tse_mr" not in cur[d] or "otc_mr" not in cur[d])]

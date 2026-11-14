@@ -273,7 +273,7 @@ function marginCard(sum, mar) {
       { label: '上市維持率', type: 'line', rows: pick(mar, (r) => r.tse_mr), unit: '%', digits: 1, lines: [130] },
       { label: '上櫃維持率', type: 'line', rows: pick(mar, (r) => r.otc_mr), unit: '%', digits: 1, lines: [130] },
     ],
-    note: '融資維持率為自行估算：Σ(個股融資餘額 × 收盤價) ÷ 融資餘額金額。個股維持率低於 130% 會被追繳，大盤值越接近 130% 代表斷頭賣壓風險越高。',
+    note: '融資維持率來源：凱基證券大盤動態（MoneyDJ）。個股維持率低於 130% 會被追繳，大盤值越接近 130% 代表斷頭賣壓風險越高。',
   });
 }
 function turnoverCard(sum, to) {
