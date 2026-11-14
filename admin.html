@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>後台資料｜台股盤勢儀表板</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top">
+  <div><h1>後台資料</h1><p class="sub" id="updated">載入中…</p></div>
+  <nav><a class="btn" href="index.html">← 回前台</a></nav>
+</header>
+<main>
+  <div class="admin-bar">
+    <div class="tabs" id="sets"></div>
+  </div>
+  <div class="admin-bar">
+    <span id="info" class="tag"></span>
+    <button class="btn" id="csv" type="button">下載 CSV</button>
+    <a class="btn" id="json" href="#">原始 JSON</a>
+  </div>
+  <div class="scroll"><table class="data" id="tbl"></table></div>
+  <p class="foot">資料由 GitHub Actions 定時執行 <code>scripts/fetch.py</code> 抓取並累積在 <code>data/</code>，每次更新都會留下 git 紀錄。新資料只會新增或覆寫同日期，不會刪除歷史。</p>
+</main>
+<script>
+const SETS = [
+  ['institutional.json', '三大法人買賣超', { d: '日期', foreign: '外資(億)', trust: '投信(億)', dealer: '自營商(億)', total: '合計(億)' }],
+  ['futures_oi.json', '期貨未平倉', { d: '日期', f_net: '外資淨額(口)', f_long: '外資多單', f_short: '外資空單', f_trade_net: '外資當日交易淨額', t_net: '投信淨額', d_net: '自營淨額' }],
+  ['margin.json', '融資', { d: '日期', tse_buy: '上市買進(張)', tse_sell: '上市賣出', tse_redeem: '上市現償', tse_bal: '上市餘額(張)', tse_amt: '上市金額(億)', otc_buy: '上櫃買進(張)', otc_sell: '上櫃賣出', otc_redeem: '上櫃現償', otc_bal: '上櫃餘額(張)', otc_amt: '上櫃金額(億)' }],
+  ['turnover.json', '成交金額', { d: '日期', amt: '成交金額(億)', shares: '成交股數(億股)' }],
+  ['twn_fear.json', '台股恐懼貪婪', { d: '日期', score: '指數', rating: '評等', momentum: '動能', vix: '波動率', pcr: 'P/C比', fut: '外資期貨', spot10: '外資現貨10日', margin: '融資變化' }],
+  ['cnn_fear_greed.json', 'CNN 恐懼貪婪', { d: '日期', score: '指數', rating: '評等' }],
+  ['vixtwn.json', 'VIXTWN', { d: '日期', vix: 'VIXTWN' }],
+  ['pcr.json', 'P/C 比', { d: '日期', pc_vol: '成交量比(%)', pc_oi: '未平倉比(%)' }],
+  ['index_TWII.json', '加權指數', null], ['index_KS11.json', 'KOSPI', null],
+  ['index_DJI.json', '道瓊', null], ['index_SOX.json', '費半', null],
+  ['commentary_log.json', '短評紀錄', { d: '時段', source: '來源', headline: '總結', body: '內容' }],
+];
+const OHLC = { d: '日期', o: '開', h: '高', l: '低', c: '收', v: '成交量' };
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let cur = { rows: [], cols: {}, file: '' };
+
+async function show(i) {
+  const [file, , cols] = SETS[i];
+  const r = await fetch(`data/${file}?t=${Date.now()}`);
+  const rows = r.ok ? await r.json() : [];
+  cur = { rows, cols: cols || OHLC, file };
+  const keys = Object.keys(cur.cols);
+  $('#info').textContent = rows.length ? `${rows.length} 筆｜${rows[0].d} ～ ${rows[rows.length - 1].d}` : '尚無資料';
+  $('#json').href = `data/${file}`;
+  const num = (v) => typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : esc(v);
+  $('#tbl').innerHTML = `<thead><tr>${keys.map((k) => `<th>${cur.cols[k]}</th>`).join('')}</tr></thead><tbody>` +
+    [...rows].reverse().map((row) => `<tr>${keys.map((k) => `<td>${num(row[k])}</td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+$('#csv').addEventListener('click', () => {
+  const keys = Object.keys(cur.cols);
+  const q = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+  const csv = '﻿' + [keys.map((k) => q(cur.cols[k])).join(','), ...cur.rows.map((r) => keys.map((k) => q(r[k])).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = cur.file.replace('.json', '.csv');
+  a.click();
+});
+const sets = $('#sets');
+sets.innerHTML = SETS.map((s, i) => `<button type="button" aria-pressed="${i === 0}">${s[1]}</button>`).join('');
+sets.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  [...sets.children].forEach((c) => c.setAttribute('aria-pressed', c === b));
+  show([...sets.children].indexOf(b));
+});
+fetch(`data/meta.json?t=${Date.now()}`).then((r) => r.json()).then((m) => {
+  $('#updated').innerHTML = `最後更新：${esc(m.updated)}（台北時間）` +
+    (m.errors?.length ? `<br><span class="err">失敗來源：${m.errors.map(esc).join('；')}</span>` : '　全部來源正常');
+}).catch(() => { $('#updated').textContent = '尚無資料'; });
+show(0);
+</script>
+</body>
+</html>
