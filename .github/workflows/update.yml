@@ -7,6 +7,10 @@ on:
         description: "回補過去一年資料"
         type: boolean
         default: false
+  push:                            # 抓取程式或排程有改動時立即重跑一次
+    paths:
+      - "scripts/**"
+      - ".github/workflows/update.yml"
   schedule:
     # 時間為 UTC（台北 = UTC+8）
     - cron: "35 0 * * 1-6"        # 08:35 開盤前：美股收盤、CNN 恐懼指數、晨間短評
