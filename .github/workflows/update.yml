@@ -1,0 +1,64 @@
+name: update-data
+
+on:
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "回補過去一年資料"
+        type: boolean
+        default: false
+  push:                            # 抓取程式或排程有改動時立即重跑一次
+    paths:
+      - "scripts/**"
+      - ".github/workflows/update.yml"
+  schedule:
+    # 時間為 UTC（台北 = UTC+8）
+    - cron: "35 0 * * 1-6"        # 08:35 開盤前：美股收盤、CNN 恐懼指數、晨間短評
+    - cron: "10,40 1-5 * * 1-5"   # 09:10–13:40 盤中每 30 分鐘：指數 K 線
+    - cron: "10 7 * * 1-5"        # 15:10 盤後：三大法人、期貨未平倉、午後短評
+    - cron: "40 8 * * 1-5"        # 16:40 補抓
+    - cron: "40 13 * * 1-5"       # 21:40 融資餘額
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install AI SDK (only when key is set)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then pip install --quiet anthropic; fi
+      - name: Fetch data
+        run: python scripts/fetch.py ${{ inputs.backfill && '--backfill' || '' }}
+      - name: Analyze + commentary
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # 盤中的例行更新不呼叫 AI（省費用）；開盤前、盤後與手動執行才寫 AI 短評
+          H=$(TZ=Asia/Taipei date +%H)
+          if [ "$H" -ge 9 ] && [ "$H" -lt 14 ] && [ "${{ github.event_name }}" = "schedule" ]; then
+            python scripts/analyze.py --no-ai
+          else
+            python scripts/analyze.py
+          fi
+      - name: Commit data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then echo "no changes"; exit 0; fi
+          git commit -m "data: $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') [skip ci]"
+          git pull --rebase --autostash
+          git push

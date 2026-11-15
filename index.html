@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台股盤勢儀表板</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>台股盤勢儀表板</h1>
+    <p class="sub" id="updated">載入中…</p>
+  </div>
+  <nav><a class="btn" href="admin.html">後台資料</a></nav>
+</header>
+
+<main>
+  <section class="card ai" id="ai">
+    <div class="card-head"><h2>AI 短評</h2><span class="tag" id="ai-meta"></span></div>
+    <p class="headline" id="ai-headline">—</p>
+    <div class="ai-body" id="ai-body"></div>
+  </section>
+
+  <h2 class="sec">指數走勢</h2>
+  <section class="grid g2" id="indices"></section>
+
+  <h2 class="sec">市場情緒</h2>
+  <section class="grid g2">
+    <div class="card" id="fear-twn"></div>
+    <div class="card" id="fear-cnn"></div>
+  </section>
+
+  <h2 class="sec">法人籌碼</h2>
+  <section class="grid g2">
+    <div class="card" id="inst"></div>
+    <div class="card" id="fut"></div>
+  </section>
+
+  <h2 class="sec">融資與量能</h2>
+  <section class="grid g2">
+    <div class="card" id="margin"></div>
+    <div class="card" id="turnover"></div>
+  </section>
+
+  <p class="foot">資料來源：Yahoo Finance、臺灣證券交易所、櫃買中心、臺灣期貨交易所、CNN Business。圖表可左右拖曳、滾輪或雙指縮放。台股慣例：紅＝上漲／買超，綠＝下跌／賣超。本頁為資訊整理，非投資建議。</p>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>
