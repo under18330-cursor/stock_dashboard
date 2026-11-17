@@ -81,6 +81,25 @@ function indicators(data) {
   });
   return out;
 }
+// 週 KD(9,3,3) 的 J 值：日 K 併成週 K，每個交易日給「當週截至該日」的值（週末值＝正式週 J）
+const mondayOf = (d) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - (t.getUTCDay() + 6) % 7); return t.toISOString().slice(0, 10); };
+function weeklyJ(daily) {
+  const out = [], weeks = [];
+  let k0 = 50, d0 = 50, k1 = 50, d1 = 50;
+  daily.forEach((b) => {
+    const key = mondayOf(b.time);
+    const w = weeks[weeks.length - 1];
+    if (!w || w.k !== key) { k0 = k1; d0 = d1; weeks.push({ k: key, h: b.high, l: b.low }); }
+    else { w.h = Math.max(w.h, b.high); w.l = Math.min(w.l, b.low); }
+    const win = weeks.slice(-9);
+    const hh = Math.max(...win.map((x) => x.h)), ll = Math.min(...win.map((x) => x.l));
+    const rsv = hh > ll ? (b.close - ll) / (hh - ll) * 100 : 50;
+    k1 = k0 * 2 / 3 + rsv / 3; d1 = d0 * 2 / 3 + k1 / 3;
+    out.push({ time: b.time, value: +(3 * k1 - 2 * d1).toFixed(1) });
+  });
+  return out;
+}
+const J_KEYS = ['TWII', 'SOX'];  // 顯示週 J 值的指數
 function indexCard(root, key, daily, intra) {
   const last = daily[daily.length - 1], prev = daily[daily.length - 2];
   const diff = last.c - prev.c, pct = diff / prev.c * 100;
@@ -98,13 +117,15 @@ function indexCard(root, key, daily, intra) {
       <button type="button" data-k="ma" aria-pressed="true">均線</button>
       <button type="button" data-k="bb" aria-pressed="true">布林通道</button>
       <button type="button" data-k="bias" aria-pressed="true">BIAS 20</button>
+      ${J_KEYS.includes(key) ? '<button type="button" data-k="wj" aria-pressed="true">週 J 值</button>' : ''}
     </div>
     <div class="legend"></div>
     <div class="legend ind"></div>
     <div class="chart tall"></div>`;
   root.appendChild(card);
   const legend = $('.legend', card), legend2 = $('.legend.ind', card);
-  const on = { ma: true, bb: true, bias: true };
+  const on = { ma: true, bb: true, bias: true, wj: J_KEYS.includes(key) };
+  const wjAll = on.wj ? weeklyJ(daily.map((r) => ({ time: r.d, high: r.h, low: r.l, close: r.c }))) : [];
   let chart, cur = 3;
   const off = intra?.gmtoffset || 0;
   const bars = (arr) => arr.map(([t, o, h, l, c]) => ({ time: t + off, open: o, high: h, low: l, close: c }));
@@ -128,7 +149,9 @@ function indexCard(root, key, daily, intra) {
     const ind = indicators(full);
     const cut = (arr) => from == null ? arr : arr.filter((r) => r.time >= from);
     const data = cut(full);
-    const low = on.bias ? 0.26 : 0.06;
+    const showJ = on.wj && !isIntra;  // 週 J 只在日線圖顯示
+    const low = on.bias && showJ ? 0.44 : on.bias || showJ ? 0.26 : 0.06;
+    $('.chart', card).style.height = showJ ? '440px' : '';
     const series = chart.addCandlestickSeries(candleOpts());
     series.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: low } });
     series.setData(data);
@@ -151,8 +174,17 @@ function indexCard(root, key, daily, intra) {
     if (on.bias) {  // 獨立刻度，畫在下方 20% 的副圖
       S.bias = chart.addHistogramSeries({ priceScaleId: 'bias', priceLineVisible: false, lastValueVisible: false,
         priceFormat: { type: 'custom', minMove: 0.01, formatter: (x) => x.toFixed(1) + '%' } });
-      chart.priceScale('bias').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+      chart.priceScale('bias').applyOptions({ scaleMargins: showJ ? { top: 0.6, bottom: 0.22 } : { top: 0.8, bottom: 0 } });
       S.bias.setData(cut(ind.bias).map((r) => ({ ...r, color: r.value >= 0 ? css('--up') : css('--down') })));
+    }
+    if (showJ) {  // 最下方副圖；25 以下為買點、100 以上停買
+      S.wj = chart.addLineSeries({ priceScaleId: 'wj', color: css('--yu-j'), lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false, priceFormat: { type: 'custom', minMove: 0.1, formatter: (x) => 'J ' + x.toFixed(0) },
+        autoscaleInfoProvider: () => ({ priceRange: { minValue: -15, maxValue: 115 } }) });
+      chart.priceScale('wj').applyOptions({ scaleMargins: { top: 0.82, bottom: 0.01 } });
+      S.wj.setData(wjAll);
+      S.wj.createPriceLine({ price: 25, color: css('--yu-buy'), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+      S.wj.createPriceLine({ price: 100, color: css('--yu-sell'), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
     }
     if (isIntra) chart.timeScale().fitContent(); else showLast(chart, show, data.length);
 
@@ -164,16 +196,17 @@ function indexCard(root, key, daily, intra) {
       if (on.ma) parts.push(`${sw('--ma5')}MA5 <b>${fmt(v.ma5, 0)}</b>`, `${sw('--ma10')}MA10 <b>${fmt(v.ma10, 0)}</b>`, `${sw('--ma20')}MA20 <b>${fmt(v.ma20, 0)}</b>`);
       if (on.bb) parts.push(`${sw('--bb')}布林 <b>${fmt(v.lo, 0)} ~ ${fmt(v.up, 0)}</b>`);
       if (on.bias) parts.push(`BIAS20 <b class="${cls(v.bias)}">${v.bias == null ? '—' : sgn(v.bias, 2) + '%'}</b>`);
+      if (showJ) parts.push(`${sw('--yu-j')}週J <b style="color:var(${v.wj < 25 ? '--yu-buy' : v.wj > 100 ? '--yu-sell' : '--ink'})">${v.wj == null ? '—' : fmt(v.wj, 1)}</b>${v.wj < 25 ? '（<25 買點）' : v.wj > 100 ? '（>100 停買）' : ''}`);
       legend2.innerHTML = parts.join('　');
     };
     const def = () => paint(data[data.length - 1].time, data[data.length - 1],
-      { ma5: lastOf(ind.ma5), ma10: lastOf(ind.ma10), ma20: lastOf(ind.ma20), up: lastOf(ind.up), lo: lastOf(ind.lo), bias: lastOf(ind.bias) });
+      { ma5: lastOf(ind.ma5), ma10: lastOf(ind.ma10), ma20: lastOf(ind.ma20), up: lastOf(ind.up), lo: lastOf(ind.lo), bias: lastOf(ind.bias), wj: wjAll.length ? wjAll[wjAll.length - 1].value : null });
     def();
     chart.subscribeCrosshairMove((p) => {
       const b = p.time && p.seriesData.get(series);
       if (!b) return def();
       const g = (k) => (S[k] && p.seriesData.get(S[k]) ? p.seriesData.get(S[k]).value : null);
-      paint(p.time, b, { ma5: g('ma5'), ma10: g('ma10'), ma20: g('ma20'), up: g('up'), lo: g('lo'), bias: g('bias') });
+      paint(p.time, b, { ma5: g('ma5'), ma10: g('ma10'), ma20: g('ma20'), up: g('up'), lo: g('lo'), bias: g('bias'), wj: g('wj') });
     });
   }
   tabs($('.tabs.range', card), ['1D', '5D', '1M', '1Y'], draw, 3);
@@ -372,22 +405,128 @@ function aiCard(c) {
   $('#ai-meta').textContent = `${c.generated}・${c.source === 'rule-based' ? '規則式摘要（未設定 AI 金鑰）' : c.source}`;
 }
 
+/* ---------- 游庭澔邏輯模擬：AI 短評內的一列 ---------- */
+const LAMP_ZH = { green: '綠燈', yellow: '黃燈', red: '紅燈', gray: '灰燈' };
+function yuAiCard(sum, com) {
+  const y = sum?.yu, el = $('#yu-ai');
+  if (!y || !el) return;
+  const mk = Object.values(y.markets).map((m) => `<div class="m ${m.light}">
+    <div class="t"><i class="lamp ${m.light}" title="${LAMP_ZH[m.light]}"></i>${esc(m.name)}：${m.light === 'green' ? '🟢 ' : ''}${esc(m.verdict)}</div>
+    <div class="d">週 J 值 ${fmt(m.j, 1)}（上週 ${fmt(m.j_prev, 1)}）｜自高點 ${fmt(m.dd, 1)}%，第 ${m.step} 個 5% 級距｜目標跌幅 ${m.target}% 已走 ${m.progress}%</div></div>`).join('');
+  const chips = y.signals.map((x) => `<span class="chip ${x.state}" title="${esc(x.rule)}"><i class="lamp ${x.state === 'hit' ? 'green' : x.state === 'stop' ? 'red' : ''}"></i>${esc(x.label)} <b>${esc(x.value)}</b></span>`).join('');
+  el.hidden = false;
+  el.innerHTML = `<div class="yu-head"><i class="lamp big ${y.light}" title="${LAMP_ZH[y.light]}"></i><b>游庭澔邏輯模擬</b>
+      <span class="verdict">${y.light === 'green' ? '🟢 ' : ''}${esc(y.verdict)}</span>
+      <span class="tag">買進訊號 ${y.hits}／${y.signals.length} 項亮綠燈・依其週誌規則推算，非本人觀點</span></div>
+    <div class="yu-mk">${mk}</div><div class="chips">${chips}</div>
+    ${com?.yu ? `<p>${esc(com.yu).replace(/^【(.+?)】/, '<b>【$1】</b>')}</p>` : ''}`;
+}
+
+/* ---------- 游庭澔近 3 年進出圖 ---------- */
+function yuCard(ev, alloc, wk, twDaily) {
+  const el = $('#yu');
+  if (!el) return;
+  if (!ev?.length || !wk?.length) { el.previousElementSibling.remove(); el.remove(); return; }
+  const TYPES = { buy: ['買股', '--yu-buy', 'arrowUp', 'belowBar'], sell: ['賣出／調節', '--yu-sell', 'arrowDown', 'aboveBar'],
+    bond: ['債券進出', '--yu-bond', 'circle', 'aboveBar'], pledge: ['質押', '--yu-pledge', 'square', 'belowBar'], pause: ['停止買入', '--yu-pause', 'square', 'aboveBar'] };
+  // 週線：整理檔為底，本站日 K 有的週以日 K 為準並往後延伸
+  const weeks = new Map(wk.map((w) => [mondayOf(w.d), { time: w.d, value: w.c }]));
+  (twDaily || []).forEach((r) => { const k = mondayOf(r.d); const w = weeks.get(k); if (w) w.value = Math.round(r.c); else weeks.set(k, { time: r.d, value: Math.round(r.c) }); });
+  const line = [...weeks.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([, v]) => v);
+  const timeOf = (d) => (weeks.get(mondayOf(d)) || line.filter((w) => w.time <= d).pop() || line[0]).time;
+  const evs = ev.map((e) => ({ ...e, time: timeOf(e.d) }));
+  const stock = [];
+  (alloc || []).filter((a) => a.stock != null).forEach((a) => { const t = timeOf(a.d); if (!stock.length || stock[stock.length - 1].time !== t) stock.push({ time: t, value: a.stock, est: a.est, cash: a.cash }); });
+  const shown = new Set(Object.keys(TYPES));
+  let twOnly = false;
+  el.innerHTML = `
+    <div class="card-head"><h2>游庭澔 資產配置週誌：進出點 × 加權指數（週線）</h2><span class="tag">${evs[0].d.slice(0, 7).replace('-', '/')} – ${evs[evs.length - 1].d.replaceAll('-', '/')}・${evs.length} 筆</span></div>
+    <div class="yu-filters">${Object.entries(TYPES).map(([k, t]) => `<label><input type="checkbox" checked data-k="${k}"><i class="lamp" style="background:var(${t[1]})"></i>${t[0]}</label>`).join('')}
+      <label><input type="checkbox" id="yu-tw">只看台股相關（006208）</label></div>
+    <div class="legend"></div>
+    <div class="chart yu"></div>
+    <div class="legend">股市部位 %（他自述）</div>
+    <div class="chart yu-al"></div>
+    <div class="yu-key"><span>▲ 買股（線下）</span><span>▼ 賣出／調節</span><span>● 債券進出</span><span>■ 質押（線下）／停止買入（線上）</span><span>編號後有「台」＝該次動到台股</span></div>
+    <div class="yu-scroll"><table class="yu"><thead><tr><th>#</th><th>日期</th><th>動作</th><th>標的</th><th>當週加權</th><th>理由／觸發指標</th><th>股／債／現</th></tr></thead><tbody></tbody></table></div>
+    <p class="note">資料為其會員週誌的重點整理（非原文），標記位置是該週加權指數收盤；他的主力是美股 QQQ／SOXX，台股 006208 為輔。點標記或表格列可互相對照。股市部位為他自述，2025/9 後多為文字推估。非投資建議。</p>`;
+  const legend = $('.legend', el), tb = $('tbody', el);
+  const chart = makeChart($('.chart', el));
+  const idx = chart.addAreaSeries({ lineColor: css('--ink2'), topColor: css('--wash'), bottomColor: 'transparent', lineWidth: 2, priceLineVisible: false,
+    priceFormat: { type: 'custom', minMove: 1, formatter: (x) => fmt(x, 0) } });
+  idx.priceScale().applyOptions({ scaleMargins: { top: 0.1, bottom: 0.14 }, minimumWidth: 64 });
+  idx.setData(line);
+  // 股市部位另開一張小圖，時間軸與主圖同步
+  const chart2 = makeChart($('.chart.yu-al', el));
+  chart2.applyOptions({ timeScale: { visible: false } });
+  chart2.addLineSeries({ visible: false, priceScaleId: 'pad' }).setData(line.map((w) => ({ time: w.time })));  // 對齊主圖的時間格
+  const al = chart2.addLineSeries({ color: css('--accent'), lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+    pointMarkersVisible: true, priceFormat: { type: 'custom', minMove: 1, formatter: (x) => x.toFixed(0) + '%' } });
+  al.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.12 }, minimumWidth: 64 });
+  al.setData(stock.map(({ time, value }) => ({ time, value })));
+  chart.timeScale().fitContent();
+  let lock = false;
+  const sync = (a, b) => a.timeScale().subscribeVisibleLogicalRangeChange((r) => { if (lock || !r) return; lock = true; b.timeScale().setVisibleLogicalRange(r); lock = false; });
+  sync(chart, chart2); sync(chart2, chart);
+  chart2.timeScale().setVisibleLogicalRange(chart.timeScale().getVisibleLogicalRange());
+  const vis = (e) => shown.has(e.type) && (!twOnly || e.tw);
+  const tkey = (t) => typeof t === 'string' ? t : `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
+  function paint() {
+    idx.setMarkers(evs.filter(vis).sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0).map((e) => ({ time: e.time, position: TYPES[e.type][3], shape: TYPES[e.type][2], color: css(TYPES[e.type][1]),
+      text: e.n + (e.tw ? '台' : ''), size: e.tw ? 1.4 : 1 })));
+    tb.innerHTML = evs.filter(vis).map((e) => `<tr data-n="${e.n}"><td><span class="yu-no" style="background:var(${TYPES[e.type][1]})">${e.n}</span></td>
+      <td class="n">${e.d.replaceAll('-', '/')}</td><td><span class="tag">${TYPES[e.type][0]}</span><br>${esc(e.action)}</td>
+      <td>${e.tw ? '<b>' + esc(e.targets) + '</b>' : esc(e.targets)}</td><td class="n">${fmt(e.twii_close)}</td><td>${esc(e.reason)}</td><td class="n">${esc(e.alloc_note || '—')}</td></tr>`).join('');
+  }
+  const def = () => { const w = line[line.length - 1]; legend.innerHTML = `<b>${dateOf(w.time)} 當週</b>　加權指數 <b>${fmt(w.value)}</b>　｜　滑到標記可看該次進出`; };
+  const hl = (n, scroll) => {
+    tb.querySelectorAll('tr.hl').forEach((r) => r.classList.remove('hl'));
+    const r = tb.querySelector(`tr[data-n="${n}"]`);
+    if (!r) return;
+    r.classList.add('hl');
+    if (scroll) { const box = $('.yu-scroll', el); box.scrollTo({ top: r.offsetTop - box.clientHeight / 2 + r.clientHeight / 2, behavior: 'smooth' }); }
+  };
+  chart.subscribeCrosshairMove((p) => {
+    const b = p.time && p.seriesData.get(idx);
+    if (!b) return def();
+    const t = tkey(p.time), hits = evs.filter((e) => e.time === t && vis(e)), s = stock.find((x) => x.time === t);
+    legend.innerHTML = `<b>${dateOf(p.time)} 當週</b>　加權指數 <b>${fmt(b.value)}</b>` + (s ? `　股市部位 <b>${s.est ? '≈' : ''}${s.value}%</b>${s.cash != null ? `／現金 ${s.cash}%` : ''}` : '') +
+      hits.map((e) => `　<b style="color:var(${TYPES[e.type][1]})">#${e.n} ${esc(e.action)}</b>（${esc(e.targets)}）`).join('');
+  });
+  chart.subscribeClick((p) => { if (!p.time) return; const t = tkey(p.time); const e = evs.find((x) => x.time === t && vis(x)); if (e) hl(e.n, true); });
+  tb.addEventListener('click', (ev2) => {
+    const r = ev2.target.closest('tr'); if (!r) return;
+    const e = evs.find((x) => x.n === +r.dataset.n); hl(e.n, false);
+    const i = line.findIndex((w) => w.time === e.time);
+    chart.timeScale().setVisibleLogicalRange({ from: i - 26, to: i + 26 });
+  });
+  $('.yu-filters', el).addEventListener('change', (e2) => {
+    const c = e2.target;
+    if (c.id === 'yu-tw') twOnly = c.checked; else if (c.checked) shown.add(c.dataset.k); else shown.delete(c.dataset.k);
+    paint();
+  });
+  paint(); def();
+}
+
 /* ---------- main ---------- */
 (async function main() {
   const keys = ['TWII', 'KS11', 'DJI', 'SOX'];
-  const [meta, sum, com, intra, twn, cnn, cnnNow, vix, inst, fut, mar, to, ...idx] = await Promise.all([
+  const [meta, sum, com, intra, twn, cnn, cnnNow, vix, inst, fut, mar, to, yuEv, yuAl, yuWk, ...idx] = await Promise.all([
     'meta.json', 'summary.json', 'commentary.json', 'intraday.json', 'twn_fear.json', 'cnn_fear_greed.json', 'cnn_now.json',
     'vixtwn.json', 'institutional.json', 'futures_oi.json', 'margin.json', 'turnover.json',
+    'yu/events.json', 'yu/allocation.json', 'yu/twii_weekly.json',
     ...keys.map((k) => `index_${k}.json`)].map(load));
   $('#updated').innerHTML = meta ? `資料更新：${esc(meta.updated)}（台北時間）` +
     (meta.errors?.length ? `　<span class="err">${meta.errors.length} 個來源更新失敗，詳見後台</span>` : '') : '尚無資料，請先執行後台抓取';
   aiCard(com);
+  yuAiCard(sum, com);
   keys.forEach((k, i) => { if (idx[i]?.length > 2) indexCard($('#indices'), k, idx[i], intra?.[k]); });
   fearCards(sum, twn, cnn, cnnNow, vix);
   instCard(sum, inst);
   futCard(sum, fut);
   marginCard(sum, mar);
   turnoverCard(sum, to);
+  yuCard(yuEv, yuAl, yuWk, idx[0]);
   // 深淺色切換時重新整理（顏色取自 CSS 變數）
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
 })();

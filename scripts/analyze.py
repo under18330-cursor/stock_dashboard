@@ -193,8 +193,121 @@ def build_summary(twn_rows, names):
                          "prev": twn_rows[-2]["score"] if len(twn_rows) > 1 else None,
                          "week_ago": twn_rows[-6]["score"] if len(twn_rows) > 5 else None,
                          "components": {names[k]: v for k, v in t.items() if k in names}}
+    yu = build_yu(s)
+    if yu:
+        s["yu"] = yu
     save("summary.json", s)
     return s
+
+
+# ---------- 游庭澔邏輯模擬 ----------
+# 依 data/yu/rules.json 整理的規則，用現有資料模擬他的判讀；KD 參數 (9,3,3) 為假設值。
+YU_MARKETS = {"TWII": ("台股", "twii_pct", 30), "SOX": ("費半", "soxx_pct", 55)}
+YU_J_BUY, YU_J_STOP, YU_CNN_BUY, YU_CNN_PANIC, YU_CNN_STOP, YU_MR, YU_STEP = 25, 100, 40, 20, 75, 155, 5
+
+
+def weekly_j(rows):
+    """日 K 併成週 K 算 KD(9,3,3) 的 J 值；每個交易日回傳「當週截至該日」的 J，週末值即正式週 J。"""
+    out, weeks, k0, d0, k1, d1 = [], [], 50.0, 50.0, 50.0, 50.0
+    for r in rows:
+        day = dt.date.fromisoformat(r["d"])
+        key = day - dt.timedelta(days=day.weekday())
+        if not weeks or weeks[-1]["k"] != key:
+            k0, d0 = k1, d1
+            weeks.append({"k": key, "h": r["h"], "l": r["l"]})
+        else:
+            weeks[-1]["h"] = max(weeks[-1]["h"], r["h"])
+            weeks[-1]["l"] = min(weeks[-1]["l"], r["l"])
+        hh = max(w["h"] for w in weeks[-9:])
+        ll = min(w["l"] for w in weeks[-9:])
+        rsv = (r["c"] - ll) / (hh - ll) * 100 if hh > ll else 50.0
+        k1 = k0 * 2 / 3 + rsv / 3
+        d1 = d0 * 2 / 3 + k1 / 3
+        out.append({"d": r["d"], "j": round(3 * k1 - 2 * d1, 1), "week": key.isoformat()})
+    return out
+
+
+def build_yu(s):
+    rules = load("yu/rules.json", {})
+    targets = {}
+    for r in rules.get("rules", []):
+        if r.get("id") == "size_target":
+            targets = r.get("thresholds") or {}
+    cnn = (s.get("cnn") or {}).get("score")
+    mr = ((s.get("margin") or {}).get("tse") or {}).get("mr")
+    yu = {"cnn": cnn, "mr": mr, "markets": {}, "signals": []}
+    order = {"red": 3, "green": 2, "yellow": 1, "gray": 0}
+    for key, (name, tkey, tdef) in YU_MARKETS.items():
+        rows = load(f"index_{key}.json")
+        if len(rows) < 60:
+            continue
+        js = weekly_j(rows)
+        j = js[-1]["j"]
+        prev = [x["j"] for x in js if x["week"] != js[-1]["week"]]
+        win = rows[-250:]
+        hi = max(win, key=lambda r: r["c"])          # 近一年收盤高點
+        since = [r for r in win if r["d"] >= hi["d"]]
+        lo = min(since, key=lambda r: r["c"])        # 高點以來收盤低點
+        close = rows[-1]["c"]
+        dd = (close / hi["c"] - 1) * 100
+        max_dd = (lo["c"] / hi["c"] - 1) * 100
+        step, max_step = int(-dd // YU_STEP), int(-max_dd // YU_STEP)
+        target = targets.get(tkey) or tdef
+        zone = j < YU_J_BUY and cnn is not None and cnn < YU_CNN_BUY
+        if j > YU_J_STOP or (cnn is not None and cnn > YU_CNN_STOP):
+            light, verdict = "red", "停止買入，股市創高就調節、讓現金回升"
+        elif zone and step >= 1 and step >= max_step:
+            light, verdict = "green", f"可進場：跌幅達第 {step} 個 5% 級距，依跌幅分批加碼"
+        elif zone and step >= 1:
+            light, verdict = "yellow", f"買進區但已自低點反彈，不追價；收盤跌破前低 {lo['c']:,.0f} 再加碼"
+        elif j < YU_J_BUY:
+            light, verdict = "yellow", "週乖離到位但情緒或跌幅未確認，只小量"
+        else:
+            light, verdict = "gray", "未到週乖離買點，觀望"
+        yu["markets"][key] = {
+            "name": name, "date": rows[-1]["d"], "close": close, "j": j, "j_prev": prev[-1] if prev else None,
+            "high": hi["c"], "high_date": hi["d"], "low": lo["c"], "low_date": lo["d"],
+            "dd": round(dd, 1), "max_dd": round(max_dd, 1), "step": step, "max_step": max_step,
+            "target": target, "progress": round(min(100, -dd / target * 100)) if target else None,
+            "light": light, "verdict": verdict}
+        yu["signals"].append({"label": f"{name}週 J 值", "value": f"{j:.1f}", "rule": f"< {YU_J_BUY} 買點／> {YU_J_STOP} 停買",
+                              "state": "hit" if j < YU_J_BUY else "stop" if j > YU_J_STOP else "off"})
+        yu["signals"].append({"label": f"{name}自高點跌幅", "value": f"{dd:.1f}%",
+                              "rule": f"每 5% 加碼一次，第 {step} 級／目標 {target}%",
+                              "state": "hit" if step >= 1 else "off"})
+    if not yu["markets"]:
+        return None
+    if cnn is not None:
+        yu["signals"].append({"label": "CNN 恐懼貪婪", "value": f"{cnn:.0f}", "rule": f"< {YU_CNN_BUY} 可佈建／< {YU_CNN_PANIC} 極度恐慌／> {YU_CNN_STOP} 貪婪",
+                              "state": "hit" if cnn < YU_CNN_BUY else "stop" if cnn > YU_CNN_STOP else "off"})
+    if mr is not None:
+        yu["signals"].append({"label": "台股融資維持率", "value": f"{mr:.1f}%", "rule": f"接近 150%（≤ {YU_MR}%）為恐慌確認",
+                              "state": "hit" if mr <= YU_MR else "off"})
+    best = max(yu["markets"].values(), key=lambda m: order[m["light"]] if m["light"] != "red" else -1)
+    reds = [m for m in yu["markets"].values() if m["light"] == "red"]
+    yu["light"] = "red" if len(reds) == len(yu["markets"]) else best["light"]
+    yu["can_enter"] = [m["name"] for m in yu["markets"].values() if m["light"] == "green"]
+    yu["verdict"] = {"green": "可進場（" + "、".join(yu["can_enter"]) + "）", "yellow": "買進區，等訊號確認",
+                     "gray": "觀望", "red": "停止買入"}[yu["light"]]
+    yu["hits"] = sum(1 for x in yu["signals"] if x["state"] == "hit")
+    return yu
+
+
+def yu_text(yu):
+    """規則式的游庭澔邏輯判讀（AI 未提供時使用）。"""
+    if not yu:
+        return ""
+    parts = []
+    for m in yu["markets"].values():
+        parts.append(f"{m['name']}週 J 值 {m['j']:.1f}、自高點 {m['dd']:.1f}%（第 {m['step']} 個 5% 級距，目標 {m['target']}%）→ {m['verdict']}")
+    tail = []
+    if yu.get("cnn") is not None:
+        c = yu["cnn"]
+        tail.append(f"CNN {c:.0f}" + ("，極度恐慌" if c < YU_CNN_PANIC else "，低於 40 情緒確認" if c < YU_CNN_BUY
+                                       else "，偏貪婪" if c > YU_CNN_STOP else "，情緒未到佈建區"))
+    if yu.get("mr") is not None:
+        tail.append(f"融資維持率 {yu['mr']:.1f}%" + ("，接近 150% 恐慌水位" if yu["mr"] <= YU_MR else "，未到 150% 恐慌水位"))
+    return "【游庭澔邏輯】" + "；".join(parts) + "。" + "；".join(tail) + "。"
 
 
 # ---------- 短評 ----------
@@ -272,7 +385,16 @@ SYSTEM = """你是台股盤勢分析師，為一位每天早上開盤前與下�
 - 只使用資料中的數字，不要編造資料裡沒有的事件或新聞。
 - 重點是解讀數字之間的關係（例如價漲量縮、外資現貨買超但期貨空單增加、指數跌而融資增），不要只複述數字。
 - 金額單位為億元新台幣，期貨為口，融資為張；mr 為大盤融資維持率(%)，低於 130% 會被追繳，越接近代表斷頭賣壓風險越高。
-- 語氣中性精簡，總長 250 字左右。這是資訊整理，不是投資建議，不要給買賣指令。"""
+- 語氣中性精簡，前面各段總長 250 字左右。這是資訊整理，不是投資建議，不要給買賣指令。
+
+最後另起一段，以【游庭澔邏輯】開頭，80 至 120 字，模擬財經作者游庭澔的資產配置邏輯會怎麼判讀 JSON 裡的 yu 欄位：
+- 他的邏輯：景氣位階決定下多重；週 KD 的 J 值（週乖離）低於 25 是中期回調買點、高於 100 停止買入讓獲利奔跑；
+  CNN 恐懼貪婪低於 40 可佈建、低於 20 極度恐慌、高於 75 偏貪婪；台股融資維持率接近 150% 是恐慌確認；
+  買法是自高點每跌 5% 加碼一次並預設現金投完的目標跌幅（yu.markets 的 target）；反彈後不追價，等跌破前低再加碼；
+  現金用完才賣短債，再來才是質押或正 2；主力看費半與那斯達克，台股為輔。
+- yu.markets 各市場的 light 與 verdict 是程式依上述規則算好的結論（green 可進場、yellow 買進區但等確認、gray 觀望、red 停止買入），
+  請照這個結論解讀並說明是哪些指標支持，不要自行改判；景氣燈號、PMI 等資料裡沒有的指標不要提。
+- 這一段是邏輯模擬，請用「依其邏輯」這類說法，不要寫成他本人的發言。"""
 
 
 def ai_comment(s):
@@ -327,15 +449,26 @@ def main():
     else:
         headline, body = rule_based(s)
         source = "rule-based"
+    # 【游庭澔邏輯】獨立成欄位，前台另外呈現；AI 沒寫時用規則式補上
+    keep, yu_par = [], ""
+    for line in body.split("\n"):
+        if line.strip().startswith("【游庭澔邏輯】"):
+            yu_par = line.strip()
+        else:
+            keep.append(line)
+    body = "\n".join(keep).strip()
+    yu_par = yu_par or yu_text(s.get("yu"))
     now = dt.datetime.now(TW)
     c = {"generated": now.strftime("%Y-%m-%d %H:%M"), "source": source,
          "headline": headline, "body": body}
+    if yu_par:
+        c["yu"] = yu_par
     save("commentary.json", c)
     # 歷史紀錄：每天上午/下午各留一筆
     slot = now.strftime("%Y-%m-%d ") + ("AM" if now.hour < 12 else "PM")
     merge_rows("commentary_log.json", [{"d": slot, **c}])
     log(f"[analyze] twn_fear={s.get('twn_fear', {}).get('score')} commentary={source}")
-    print(headline + "\n" + body)
+    print(headline + "\n" + body + ("\n" + yu_par if yu_par else ""))
 
 
 if __name__ == "__main__":
