@@ -52,6 +52,10 @@ python -m http.server 8000           # 開 http://localhost:8000
 
 `index_*.json` 日 K｜`intraday.json` 5 分／60 分 K｜`institutional.json` 三大法人（億元）｜`futures_oi.json` 台指期未平倉（口）｜`margin.json` 融資（張／億元）｜`turnover.json` 成交金額｜`vixtwn.json`｜`pcr.json`｜`cnn_fear_greed.json`｜`twn_fear.json`｜`commentary_log.json` 短評紀錄
 
+## 游庭澔週誌進出整理（`data/yu/`）
+
+人工整理的靜態參考資料，排程不會更新：`rules.json` 買賣判斷規則與門檻｜`events.json` 46 筆進出事件｜`allocation.json` 自述資產比例｜`twii_weekly.json` 加權指數週收盤。說明與指標併入規劃見 [`docs/yu-playbook.md`](docs/yu-playbook.md)。
+
 ## 已知限制
 
 - VIXTWN 期交所只公開最近約四個月的檔案，更早的歷史無法回補，之後會逐日累積。
