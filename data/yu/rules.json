@@ -1,0 +1,45 @@
+{
+  "source": "游庭澔（jackalopelin）會員週誌「總經資產配置看法」2023/10–2026/11/15 重點整理，非原文；不構成投資建議",
+  "status_legend": {
+    "ready": "儀表板 data/ 已有資料，可直接計算",
+    "derivable": "可由現有資料推算（需新增計算）",
+    "missing": "需新增資料來源",
+    "manual": "他的主觀設定或部位紀律，僅能人工維護"
+  },
+  "rules": [
+    {"id": "cycle_light", "group": "景氣位階", "name": "景氣對策信號燈", "buy": "藍燈", "stop": "紅燈（數鈔票）", "use": "決定投入強度", "status": "missing", "data": "國發會景氣指標（月）"},
+    {"id": "cycle_pmi", "group": "景氣位階", "name": "製造業 PMI", "buy": "< 50", "stop": "高檔、擴張滿 3 年", "use": "判斷庫存循環位置", "thresholds": {"buy_lt": 50}, "status": "missing", "data": "ISM／中經院 PMI（月）"},
+    {"id": "cycle_backlog", "group": "景氣位階", "name": "未完成訂單減客戶存貨", "buy": "< 0", "stop": "> 10% 過熱", "use": "判斷庫存循環位置", "thresholds": {"buy_lt": 0, "stop_gt": 10}, "status": "missing", "data": "ISM PMI 細項（月）"},
+    {"id": "cycle_leading", "group": "景氣位階", "name": "領先指標／OECD 領先指標", "buy": "< 100、見底上彎", "stop": "高位下彎", "use": "判斷庫存循環位置", "thresholds": {"buy_lt": 100}, "status": "missing", "data": "國發會、OECD CLI（月）"},
+    {"id": "cycle_lead_lag", "group": "景氣位階", "name": "領先／落後指標比值", "buy": "< 1 才重倉", "stop": "高速上揚＝高位", "use": "3–4 年庫存循環大底", "thresholds": {"buy_lt": 1}, "status": "missing", "data": "國發會（月）"},
+    {"id": "cycle_bull_year", "group": "景氣位階", "name": "三牛一熊", "buy": "熊市年／牛市初期", "stop": "牛市第 3 年起轉保守、預留現金", "use": "時間尺度", "status": "manual", "data": "人工設定牛市起點"},
+
+    {"id": "tech_weekly_j", "group": "技術乖離", "name": "週 KD 的 J 值（他稱「週乖離」）", "buy": "< 25，接近 0 軸＝中期回調買點", "stop": "> 100 高檔鈍化＝停止買入，讓獲利奔跑", "use": "決定買點時機", "thresholds": {"buy_lt": 25, "stop_gt": 100}, "status": "derivable", "data": "index_TWII.json、index_SOX.json 日 K 併成週 K（QQQ／那指需新增）"},
+    {"id": "tech_monthly_j", "group": "技術乖離", "name": "月乖離", "buy": "回到 0 軸＝庫存循環大底，才動用債券部位抄底", "stop": null, "use": "動用債券的時機", "thresholds": {"buy_lte": 0}, "status": "derivable", "data": "同上併成月 K；現有日 K 僅約 2 年，月線樣本偏少"},
+
+    {"id": "sent_cnn", "group": "情緒", "name": "CNN 恐懼貪婪指數", "buy": "< 40 可佈建，< 20 極度恐慌", "stop": "> 75 偏貪婪", "use": "確認低點", "thresholds": {"buy_lt": 40, "strong_buy_lt": 20, "stop_gt": 75}, "status": "ready", "data": "cnn_fear_greed.json、cnn_now.json"},
+    {"id": "sent_vix", "group": "情緒", "name": "VIX", "buy": "飆高（例：2025/4 破 45；2024/8 為 23）", "stop": null, "use": "確認低點", "status": "ready", "data": "cnn_now.json 有 VIX 分項分數、vixtwn.json 為台版；美股 VIX 原始值需新增"},
+    {"id": "sent_aaii", "group": "情緒", "name": "AAII 散戶看空比例", "buy": "> 50%（2025/4 為 61%）", "stop": null, "use": "確認低點", "thresholds": {"buy_gt": 50}, "status": "missing", "data": "AAII Sentiment Survey（週）"},
+    {"id": "sent_margin_ratio", "group": "情緒", "name": "台股融資維持率", "buy": "接近或低於 150%（2024/8 為 151%）", "stop": null, "use": "確認低點", "thresholds": {"buy_lt": 150}, "status": "ready", "data": "margin.json 的 tse_mr"},
+    {"id": "sent_breadth", "group": "情緒", "name": "市場廣度（站上 50 日線家數）", "buy": "低檔", "stop": null, "use": "確認低點", "status": "missing", "data": "cnn_now.json 僅有 breadth 分項分數"},
+
+    {"id": "size_drawdown", "group": "分批", "name": "自高點跌幅", "buy": "每跌 5% 加碼一次，不用時間規劃", "stop": null, "use": "決定每次買多少", "thresholds": {"step_pct": 5}, "status": "derivable", "data": "index_TWII.json、index_SOX.json（summary.json 已有 high_250d）"},
+    {"id": "size_target", "group": "分批", "name": "現金投完的目標跌幅", "buy": "2026 年：006208／QQQ 跌 30%、SOXX 跌 40%；11 月上調為 SOXX 55%、台股 30%", "stop": null, "use": "現金投完點", "thresholds": {"twii_pct": 30, "qqq_pct": 30, "soxx_pct": 55}, "status": "manual", "data": "每輪回調他會重設，見 history"},
+
+    {"id": "cash_ratio", "group": "資金", "name": "現金比例", "buy": "回調時壓到 < 10%", "stop": "擴張末段回升到 15–20%（股市創高就調節）", "use": "部位紀律", "thresholds": {"low": 10, "high": 20}, "status": "manual", "data": "allocation.json（他自述）"},
+    {"id": "cash_ladder", "group": "資金", "name": "現金用完後的順序", "buy": "賣短債 → 股票質押／正 2 ETF", "stop": "股市大漲時賣正 2 降槓桿", "use": "槓桿管理", "status": "manual", "data": null},
+
+    {"id": "bond_10y", "group": "債券", "name": "10 年期美債殖利率", "buy": "≥ 4.5% 加碼（債券梯 4–4.5%、4.5–5%）", "stop": "股市乖離達標時賣短債轉股", "use": "股債約 8:2 再平衡", "thresholds": {"buy_gte": 4.5}, "status": "missing", "data": "Yahoo ^TNX"},
+
+    {"id": "val_fpe", "group": "估值", "name": "前瞻本益比", "buy": "台股 15 倍以下＝庫存調整等級", "stop": null, "use": "分辨中期回調與熊市", "thresholds": {"twii_lt": 15}, "status": "missing", "data": "無免費穩定來源"},
+    {"id": "redline", "group": "紅線", "name": "信用市場與企業獲利", "buy": null, "stop": "信用系統性收縮、企業獲利全面衰退", "use": "由買方轉保守", "status": "missing", "data": "高收益債利差（FRED）可作代理"}
+  ],
+  "drawdown_targets_history": [
+    {"d": "2024-04-22", "soxx_pct": 25, "qqq_pct": 20},
+    {"d": "2024-07-22", "soxx_pct": 50, "qqq_pct": 40},
+    {"d": "2025-11-21", "soxx_pct": 30, "market_pct": 15},
+    {"d": "2026-03-08", "soxx_pct": "20–25", "qqq_pct": "15–20"},
+    {"d": "2026-06-14", "soxx_pct": 40, "qqq_pct": 30, "twii_pct": 30},
+    {"d": "2026-11-06", "soxx_pct": 55, "twii_pct": 30}
+  ]
+}

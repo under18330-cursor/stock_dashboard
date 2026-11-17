@@ -93,3 +93,40 @@ table.data td:first-child, table.data th:first-child { text-align: left; }
 .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
 .legend.ind { font-size: 11.5px; }
 .chart.tall { height: 360px; }
+/* 游庭澔邏輯模擬 */
+:root { --yu-buy: #12843a; --yu-sell: #d03b3b; --yu-bond: #c77700; --yu-pledge: #7c3aed; --yu-pause: #898781; --yu-wait: #d99a00; --yu-j: #0e8f8f; }
+@media (prefers-color-scheme: dark) { :root { --yu-buy: #35c46a; --yu-sell: #e66767; --yu-bond: #e6a23c; --yu-pledge: #a78bfa; --yu-pause: #898781; --yu-wait: #e6b93c; --yu-j: #3fc6c6; } }
+.yu-ai { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.yu-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.yu-head .verdict { font-weight: 650; font-size: 15px; }
+.lamp { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--yu-pause); flex: none; }
+.lamp.green { background: var(--yu-buy); box-shadow: 0 0 0 3px color-mix(in srgb, var(--yu-buy) 25%, transparent); }
+.lamp.yellow { background: var(--yu-wait); } .lamp.red { background: var(--yu-sell); }
+.lamp.big { width: 16px; height: 16px; }
+.yu-mk { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.yu-mk .m { background: var(--wash); border-radius: 8px; padding: 8px 10px; border-left: 4px solid var(--yu-pause); }
+.yu-mk .m.green { border-left-color: var(--yu-buy); background: color-mix(in srgb, var(--yu-buy) 12%, transparent); }
+.yu-mk .m.yellow { border-left-color: var(--yu-wait); } .yu-mk .m.red { border-left-color: var(--yu-sell); }
+.yu-mk .m .t { display: flex; align-items: center; gap: 6px; font-weight: 650; }
+.yu-mk .m .d { font-size: 12px; color: var(--ink2); margin-top: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 9px; border-radius: 99px;
+  border: 1px solid var(--border); color: var(--ink2); font-variant-numeric: tabular-nums; }
+.chip b { color: var(--ink); }
+.chip .lamp { width: 8px; height: 8px; box-shadow: none; }
+.chip.hit { border-color: var(--yu-buy); } .chip.stop { border-color: var(--yu-sell); }
+.yu-ai p { margin: 4px 0; color: var(--ink2); }
+.yu-filters { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--ink2); margin: 2px 0 6px; }
+.yu-filters label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.yu-key { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink2); margin: 6px 0 10px; }
+.chart.yu { height: 420px; }
+.chart.yu-al { height: 110px; }
+.yu-scroll { overflow: auto; max-height: 520px; border: 1px solid var(--border); border-radius: 8px; }
+table.yu { border-collapse: collapse; width: 100%; min-width: 820px; font-size: 12.5px; }
+table.yu th, table.yu td { padding: 6px 8px; border-bottom: 1px solid var(--grid); text-align: left; vertical-align: top; }
+table.yu th { position: sticky; top: 0; background: var(--surface); color: var(--ink2); font-weight: 600; z-index: 1; }
+table.yu td.n { white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.yu tr.hl td { background: color-mix(in srgb, var(--yu-wait) 22%, transparent); }
+table.yu tr { cursor: pointer; }
+.yu-no { display: inline-flex; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; align-items: center; justify-content: center;
+  color: #fff; font-size: 11px; font-weight: 700; }
