@@ -426,7 +426,7 @@ function yuAiCard(sum, com) {
 function yuCard(ev, alloc, wk, twDaily) {
   const el = $('#yu');
   if (!el) return;
-  if (!ev?.length || !wk?.length) { el.previousElementSibling.remove(); el.remove(); return; }
+  if (!ev?.length || !wk?.length) { el.innerHTML = '<p class="note">尚無資料</p>'; return; }
   const TYPES = { buy: ['買股', '--yu-buy', 'arrowUp', 'belowBar'], sell: ['賣出／調節', '--yu-sell', 'arrowDown', 'aboveBar'],
     bond: ['債券進出', '--yu-bond', 'circle', 'aboveBar'], pledge: ['質押', '--yu-pledge', 'square', 'belowBar'], pause: ['停止買入', '--yu-pause', 'square', 'aboveBar'] };
   // 週線：整理檔為底，本站日 K 有的週以日 K 為準並往後延伸
@@ -510,11 +510,17 @@ function yuCard(ev, alloc, wk, twDaily) {
 
 /* ---------- main ---------- */
 (async function main() {
+  if (document.body.dataset.page === 'yu') {  // 分頁：游庭澔近 3 年進出圖
+    const [meta, ev, al, wk, tw] = await Promise.all(['meta.json', 'yu/events.json', 'yu/allocation.json', 'yu/twii_weekly.json', 'index_TWII.json'].map(load));
+    $('#updated').textContent = meta ? `指數更新：${meta.updated}（台北時間）` : '';
+    yuCard(ev, al, wk, tw);
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
+    return;
+  }
   const keys = ['TWII', 'KS11', 'DJI', 'SOX'];
-  const [meta, sum, com, intra, twn, cnn, cnnNow, vix, inst, fut, mar, to, yuEv, yuAl, yuWk, ...idx] = await Promise.all([
+  const [meta, sum, com, intra, twn, cnn, cnnNow, vix, inst, fut, mar, to, ...idx] = await Promise.all([
     'meta.json', 'summary.json', 'commentary.json', 'intraday.json', 'twn_fear.json', 'cnn_fear_greed.json', 'cnn_now.json',
     'vixtwn.json', 'institutional.json', 'futures_oi.json', 'margin.json', 'turnover.json',
-    'yu/events.json', 'yu/allocation.json', 'yu/twii_weekly.json',
     ...keys.map((k) => `index_${k}.json`)].map(load));
   $('#updated').innerHTML = meta ? `資料更新：${esc(meta.updated)}（台北時間）` +
     (meta.errors?.length ? `　<span class="err">${meta.errors.length} 個來源更新失敗，詳見後台</span>` : '') : '尚無資料，請先執行後台抓取';
@@ -526,7 +532,6 @@ function yuCard(ev, alloc, wk, twDaily) {
   futCard(sum, fut);
   marginCard(sum, mar);
   turnoverCard(sum, to);
-  yuCard(yuEv, yuAl, yuWk, idx[0]);
   // 深淺色切換時重新整理（顏色取自 CSS 變數）
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
 })();
