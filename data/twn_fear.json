@@ -223,5 +223,6 @@
 {"d":"2026-11-12","score":4.5,"rating":"極度恐懼","momentum":2.2,"vix":3.6,"pcr":6.6,"fut":1.9,"spot10":3.7,"margin":8.8},
 {"d":"2026-11-13","score":5.4,"rating":"極度恐懼","momentum":3.0,"vix":12.1,"pcr":2.2,"fut":1.4,"spot10":6.7,"margin":7.0},
 {"d":"2026-11-16","score":3.2,"rating":"極度恐懼","momentum":0.6,"pcr":2.2,"fut":3.1,"spot10":7.1,"vix":0.7,"margin":5.6},
-{"d":"2026-11-17","score":3.5,"rating":"極度恐懼","momentum":0.6,"pcr":2.6,"fut":2.7,"spot10":10.4,"vix":0.7,"margin":3.8}
+{"d":"2026-11-17","score":3.5,"rating":"極度恐懼","momentum":0.6,"pcr":2.6,"fut":2.7,"spot10":10.4,"vix":0.7,"margin":3.8},
+{"d":"2026-11-18","score":4.2,"rating":"極度恐懼","momentum":1.0,"pcr":0.6,"fut":2.7,"spot10":12.5}
 ]
