@@ -243,5 +243,6 @@
 {"d":"2026-11-13","d_long":3733,"d_short":6504,"d_net":-2771,"d_trade_net":-2523,"t_long":103019,"t_short":3096,"t_net":99923,"t_trade_net":1022,"f_long":6186,"f_short":107056,"f_net":-100870,"f_trade_net":-1297},
 {"d":"2026-11-16","d_long":5573,"d_short":4414,"d_net":1159,"d_trade_net":4006,"t_long":95851,"t_short":3445,"t_net":92406,"t_trade_net":-7517,"f_long":12030,"f_short":108817,"f_net":-96787,"f_trade_net":5178},
 {"d":"2026-11-17","d_long":5052,"d_short":5488,"d_net":-436,"d_trade_net":-1820,"t_long":94566,"t_short":3340,"t_net":91226,"t_trade_net":-1180,"f_long":17052,"f_short":114948,"f_net":-97896,"f_trade_net":-1144},
-{"d":"2026-11-18","d_long":3306,"d_short":4763,"d_net":-1457,"d_trade_net":-2486,"t_long":96839,"t_short":3266,"t_net":93573,"t_trade_net":2347,"f_long":9922,"f_short":109360,"f_net":-99438,"f_trade_net":-2620}
+{"d":"2026-11-18","d_long":3306,"d_short":4763,"d_net":-1457,"d_trade_net":-2486,"t_long":96839,"t_short":3266,"t_net":93573,"t_trade_net":2347,"f_long":9922,"f_short":109360,"f_net":-99438,"f_trade_net":-2620},
+{"d":"2026-11-19","d_long":3102,"d_short":4557,"d_net":-1455,"d_trade_net":-16,"t_long":95246,"t_short":3455,"t_net":91791,"t_trade_net":-1782,"f_long":12664,"f_short":111883,"f_net":-99219,"f_trade_net":1438}
 ]
