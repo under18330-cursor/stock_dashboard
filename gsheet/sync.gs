@@ -19,6 +19,7 @@ const SETS = [
   ['台股恐懼貪婪', 'twn_fear.json', { d: '日期', score: '指數', rating: '評等', momentum: '動能', vix: '波動率', pcr: 'P/C比', fut: '外資期貨', spot10: '外資現貨10日', margin: '融資變化' }],
   ['CNN恐懼貪婪', 'cnn_fear_greed.json', { d: '日期', score: '指數', rating: '評等' }],
   ['VIXTWN', 'vixtwn.json', { d: '日期', vix: 'VIXTWN' }],
+  ['VIX美股', 'vix_us.json', { d: '日期', vix: 'VIX 收盤', o: '開', h: '高', l: '低' }],
   ['PC比', 'pcr.json', { d: '日期', pc_vol: '成交量比(%)', pc_oi: '未平倉比(%)' }],
   ['加權指數', 'index_TWII.json', OHLC],
   ['KOSPI', 'index_KS11.json', OHLC],
