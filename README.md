@@ -53,7 +53,7 @@ python -m http.server 8000           # 開 http://localhost:8000
 
 每個檔案是以日期 `d` 為鍵的 JSON 陣列，每次更新只新增或覆寫同日期，歷史不會刪除。
 
-`index_*.json` 日 K｜`intraday.json` 5 分／60 分 K｜`institutional.json` 三大法人（億元）｜`futures_oi.json` 台指期未平倉（口）｜`margin.json` 融資（張／億元）｜`turnover.json` 成交金額｜`vixtwn.json`｜`pcr.json`｜`cnn_fear_greed.json`｜`twn_fear.json`｜`commentary_log.json` 短評紀錄
+`index_*.json` 日 K（加權指數的 `v` 為證交所上市成交金額，億元；其餘指數為 Yahoo 成交量）｜`intraday.json` 5 分／60 分 K｜`institutional.json` 三大法人（億元）｜`futures_oi.json` 台指期未平倉（口）｜`margin.json` 融資（張／億元）｜`turnover.json` 成交金額｜`vixtwn.json`｜`pcr.json`｜`cnn_fear_greed.json`｜`twn_fear.json`｜`commentary_log.json` 短評紀錄
 
 ## 游庭澔週誌進出整理（`data/yu/`）
 

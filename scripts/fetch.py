@@ -134,7 +134,10 @@ def fetch_indices(backfill):
         rows = []
         for t, o, h, l, c, v in bars:
             d = dt.datetime.fromtimestamp(t + off, dt.timezone.utc).strftime("%Y-%m-%d")
-            rows.append({"d": d, "o": o, "h": h, "l": l, "c": c, "v": v})
+            row = {"d": d, "o": o, "h": h, "l": l, "c": c, "v": v}
+            if key == "TWII":  # 加權指數的量改用證交所資料（見 apply_twse_volume），不採 Yahoo 的值
+                del row["v"]
+            rows.append(row)
         n = len(merge_rows(f"index_{key}.json", rows))
         time.sleep(1)
         _, m5 = yahoo(cfg["symbol"], "5d", "5m")
@@ -297,18 +300,37 @@ def fetch_institutional(dates):
 def fetch_turnover(backfill):
     """上市每日成交金額（量能），證交所 FMTQIK 以月為單位。"""
     today = dt.datetime.now(TW).date()
-    y, m, rows = today.year, today.month, []
-    for _ in range(13 if backfill else 2):
+    rows = []
+
+    def month(y, m):
         j = http_json("https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json"
                       f"&date={y}{m:02d}01", headers=TWSE_H)
         for r in (j.get("data") or []) if j.get("stat") == "OK" else []:
             yy, mm, dd = r[0].split("/")
             rows.append({"d": f"{int(yy) + 1911}-{mm}-{dd}", "amt": yi(num(r[2])),
                          "shares": round(num(r[1]) / 1e8, 2)})
-        m -= 1
-        if m == 0:
-            y, m = y - 1, 12
         time.sleep(TWSE_PAUSE)
+
+    def prev(y, m):
+        return (y - 1, 12) if m == 1 else (y, m - 1)
+
+    y, m = today.year, today.month
+    for _ in range(13 if backfill else 2):
+        month(y, m)
+        y, m = prev(y, m)
+    # 加權指數日 K 比成交資料早的部分，每次往前補 3 個月（證交所會限流，不一次抓完；失敗下次再補）
+    have, twii = load("turnover.json"), load("index_TWII.json")
+    first = min([r["d"] for r in have + rows] or [""])[:7]
+    if twii and first and twii[0]["d"][:7] < first:
+        y, m = prev(*map(int, first.split("-")))
+        try:
+            for _ in range(3):
+                if f"{y}-{m:02d}" < twii[0]["d"][:7]:
+                    break
+                month(y, m)
+                y, m = prev(y, m)
+        except Exception as e:
+            log(f"  較早月份補抓失敗，下次再試: {e}")
     out = merge_rows("turnover.json", rows)
     log(f"  成交金額: total {len(out)} rows")
 
@@ -526,6 +548,18 @@ def fetch_maintenance(dates):
     log(f"  融資維持率: +{len(rows)} (total rows {len(out)})")
 
 
+def apply_twse_volume():
+    """加權指數日 K 的 v 改成證交所上市成交金額（億元）；證交所尚未公布的日期留空。"""
+    amt = {r["d"]: r["amt"] for r in load("turnover.json")}
+    rows = load("index_TWII.json")
+    if not rows or not amt:
+        return
+    for r in rows:
+        r["v"] = amt.get(r["d"])
+    save("index_TWII.json", rows)
+    log(f"  加權指數成交金額: {sum(1 for r in rows if r['v'] is not None)}/{len(rows)} 日")
+
+
 # ---------- main ----------
 def main():
     ap = argparse.ArgumentParser()
@@ -559,6 +593,12 @@ def main():
     if today.weekday() < 5 and today.isoformat() not in dates:
         dates = dates + [today.isoformat()]
     run("turnover", fetch_turnover, a.backfill)
+    if want("turnover") or want("indices"):
+        try:
+            apply_twse_volume()
+        except Exception as e:
+            errors.append(f"twii_volume: {e}")
+            log(f"  !! twii_volume failed: {e}")
     run("inst", fetch_institutional, dates)
     run("margin", fetch_margin, dates)
     run("mr", fetch_maintenance, dates)
