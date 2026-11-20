@@ -282,7 +282,7 @@ function gauge(score, rating) {
       <div class="pin" style="left:${Math.max(0, Math.min(100, score))}%"></div>
       <div class="labels"><span>0 極度恐懼</span><span>50 中性</span><span>極度貪婪 100</span></div></div>`;
 }
-function fearCards(sum, twn, cnn, cnnNow, vix) {
+function fearCards(sum, twn, cnn, cnnNow, vix, vixUs) {
   const zh = { 'extreme fear': '極度恐懼', fear: '恐懼', neutral: '中性', greed: '貪婪', 'extreme greed': '極度貪婪' };
   const t = sum?.twn_fear, v = sum?.vixtwn;
   if (t && twn) {
@@ -311,9 +311,14 @@ function fearCards(sum, twn, cnn, cnnNow, vix) {
       title: 'CNN 恐懼與貪婪指數（美股）', date: (cnnNow.timestamp || '').slice(0, 10),
       top: gauge(cnnNow.score, zh[cnnNow.rating] || cnnNow.rating) + `<div class="tiles">
         ${tile('前一日', fmt(cnnNow.previous_close, 0))}${tile('一週前', fmt(cnnNow.previous_1_week, 0))}
-        ${tile('一個月前', fmt(cnnNow.previous_1_month, 0))}${tile('一年前', fmt(cnnNow.previous_1_year, 0))}</div>
+        ${tile('一個月前', fmt(cnnNow.previous_1_month, 0))}${tile('一年前', fmt(cnnNow.previous_1_year, 0))}
+        ${sum?.vix_us ? tile('VIX 指數 (CBOE)', fmt(sum.vix_us.value, 2), '', `日 ${sgn(sum.vix_us.chg1d, 2)}／5日 ${sgn(sum.vix_us.chg5d, 2)}・近一年第 ${fmt(sum.vix_us.pct_rank_1y)} 百分位`) : ''}</div>
         <div class="comps">${comps}</div>`,
-      views: [{ label: 'CNN Fear & Greed', type: 'line', rows: pick(cnn, (r) => r.score), digits: 1, lines: [25, 75] }],
+      views: [
+        { label: 'CNN Fear & Greed', type: 'line', rows: pick(cnn, (r) => r.score), digits: 1, lines: [25, 75] },
+        ...(vixUs?.length ? [{ label: 'VIX 指數', type: 'line', rows: pick(vixUs, (r) => r.vix), digits: 2, lines: [20, 30] }] : []),
+      ],
+      note: 'VIX 為 CBOE 波動率指數（INDEXCBOE: VIX），由 S&P 500 選擇權推算未來 30 天預期波動；一般 20 以上偏緊張、30 以上屬恐慌。',
     });
   }
 }
@@ -518,16 +523,16 @@ function yuCard(ev, alloc, wk, twDaily) {
     return;
   }
   const keys = ['TWII', 'KS11', 'DJI', 'SOX'];
-  const [meta, sum, com, intra, twn, cnn, cnnNow, vix, inst, fut, mar, to, ...idx] = await Promise.all([
+  const [meta, sum, com, intra, twn, cnn, cnnNow, vix, vixUs, inst, fut, mar, to, ...idx] = await Promise.all([
     'meta.json', 'summary.json', 'commentary.json', 'intraday.json', 'twn_fear.json', 'cnn_fear_greed.json', 'cnn_now.json',
-    'vixtwn.json', 'institutional.json', 'futures_oi.json', 'margin.json', 'turnover.json',
+    'vixtwn.json', 'vix_us.json', 'institutional.json', 'futures_oi.json', 'margin.json', 'turnover.json',
     ...keys.map((k) => `index_${k}.json`)].map(load));
   $('#updated').innerHTML = meta ? `資料更新：${esc(meta.updated)}（台北時間）` +
     (meta.errors?.length ? `　<span class="err">${meta.errors.length} 個來源更新失敗，詳見後台</span>` : '') : '尚無資料，請先執行後台抓取';
   aiCard(com);
   yuAiCard(sum, com);
   keys.forEach((k, i) => { if (idx[i]?.length > 2) indexCard($('#indices'), k, idx[i], intra?.[k]); });
-  fearCards(sum, twn, cnn, cnnNow, vix);
+  fearCards(sum, twn, cnn, cnnNow, vix, vixUs);
   instCard(sum, inst);
   futCard(sum, fut);
   marginCard(sum, mar);

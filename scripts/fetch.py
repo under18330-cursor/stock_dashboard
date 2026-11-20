@@ -181,6 +181,18 @@ def fetch_cnn(backfill):
     log(f"  CNN: {now['score']:.1f} {now['rating']} (+{len(rows)} rows)")
 
 
+def fetch_vix_us(backfill):
+    """CBOE VIX 指數（INDEXCBOE: VIX，美股波動率／恐慌指數），日 K。"""
+    meta, bars = yahoo("^VIX", "2y" if backfill else "1mo", "1d")
+    off = meta["gmtoffset"]
+    rows = []
+    for t, o, h, l, c, _v in bars:
+        d = dt.datetime.fromtimestamp(t + off, dt.timezone.utc).strftime("%Y-%m-%d")
+        rows.append({"d": d, "o": o, "h": h, "l": l, "vix": c})
+    out = merge_rows("vix_us.json", rows)
+    log(f"  CBOE VIX: total {len(out)} rows, last {out[-1]['vix'] if out else None}")
+
+
 def fetch_vix(backfill):
     """台指選擇權波動率指數 VIXTWN（期交所只提供近幾個月的月檔）。"""
     today = dt.datetime.now(TW).date()
@@ -564,7 +576,7 @@ def apply_twse_volume():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backfill", action="store_true", help="回補過去一年")
-    ap.add_argument("--only", default="", help="逗號分隔: indices,cnn,vix,pcr,futures,turnover,inst,margin,mr")
+    ap.add_argument("--only", default="", help="逗號分隔: indices,cnn,vix,vixus,pcr,futures,turnover,inst,margin,mr")
     a = ap.parse_args()
     only = set(filter(None, a.only.split(",")))
     want = lambda k: not only or k in only
@@ -584,6 +596,7 @@ def main():
     run("indices", fetch_indices, a.backfill)
     run("cnn", fetch_cnn, a.backfill)
     run("vix", fetch_vix, a.backfill)
+    run("vixus", fetch_vix_us, a.backfill)
     run("pcr", fetch_pcr, a.backfill)
     dates = run("futures", fetch_futures, a.backfill) or [r["d"] for r in load("futures_oi.json")]
     # 例行模式只檢查最近 10 個交易日是否有缺；回補模式檢查全部

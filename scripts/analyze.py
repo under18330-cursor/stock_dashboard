@@ -179,6 +179,14 @@ def build_summary(twn_rows, names):
                                               "previous_1_month", "previous_1_year")},
                     "rating": CNN_ZH.get(cnn.get("rating"), cnn.get("rating")),
                     "date": (cnn.get("timestamp") or "")[:10]}
+    vu = load("vix_us.json")
+    if len(vu) >= 6:
+        v1y = [r["vix"] for r in vu[-250:]]
+        s["vix_us"] = {"date": vu[-1]["d"], "value": vu[-1]["vix"],
+                       "chg1d": rnd(vu[-1]["vix"] - vu[-2]["vix"]),
+                       "chg5d": rnd(vu[-1]["vix"] - vu[-6]["vix"]),
+                       "high_1y": max(v1y), "low_1y": min(v1y),
+                       "pct_rank_1y": rnd(pct_rank(v1y, vu[-1]["vix"]), 0)}
     vix = load("vixtwn.json")
     if len(vix) >= 6:
         s["vixtwn"] = {"date": vix[-1]["d"], "value": vix[-1]["vix"],
@@ -363,6 +371,8 @@ def rule_based(s):
     mood = []
     if s.get("twn_fear"):
         mood.append(f"台股恐懼貪婪指數 {s['twn_fear']['score']:.0f}（{s['twn_fear']['rating']}）")
+    if s.get("vix_us"):
+        mood.append(f"美股 VIX {s['vix_us']['value']:.1f}（{sgn(s['vix_us']['chg1d'])}）")
     if s.get("vixtwn"):
         mood.append(f"VIXTWN {s['vixtwn']['value']:.1f}（{sgn(s['vixtwn']['chg1d'])}）")
     if s.get("cnn"):
