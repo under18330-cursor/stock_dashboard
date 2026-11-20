@@ -273,13 +273,19 @@ def yi(x):  # 元 -> 億元
     return None if x is None else round(x / 1e8, 2)
 
 
+INST_REFRESH = 5  # 每次重抓最近幾個交易日的三大法人
+
+
 def fetch_institutional(dates):
     have = {r["d"] for r in load("institutional.json")}
     todo = [d for d in dates if d not in have]
-    if via_finmind("三大法人", finmind_institutional, "institutional.json", todo):
-        return
+    # 缺很多天（回補）時才用 FinMind 一次補齊
+    if len(todo) > INST_REFRESH and via_finmind("三大法人", finmind_institutional, "institutional.json", todo):
+        todo = []
+    # 證交所 15:00 左右先公布初步數字，之後會修正（主要是投信）；所以最近幾個交易日每次都向證交所重抓
+    recent = sorted(have | set(dates))[-INST_REFRESH:]
     rows = []
-    for i, d in enumerate(todo):
+    for i, d in enumerate(sorted(set(todo) | set(recent))):
         try:
             j = http_json("https://www.twse.com.tw/rwd/zh/fund/BFI82U?type=day&response=json"
                           f"&dayDate={d.replace('-', '')}", headers=TWSE_H)
