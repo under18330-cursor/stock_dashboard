@@ -21,7 +21,7 @@ const SETS = [
   ['CNN恐懼貪婪', 'cnn_fear_greed.json', { d: '日期', score: '指數', rating: '評等' }],
   ['VIX', [
     ['vixtwn.json', { vix: 'VIXTWN（台股）' }],
-    ['vix_us.json', { vix: 'VIX美股 收盤', o: 'VIX美股 開', h: 'VIX美股 高', l: 'VIX美股 低' }],
+    ['vix_us.json', { vix: 'VIX美股' }],  // 收盤值
   ]],
   ['PC比', 'pcr.json', { d: '日期', pc_vol: '成交量比(%)', pc_oi: '未平倉比(%)' }],
   ['加權指數', 'index_TWII.json', Object.assign({}, OHLC, { v: '成交金額(億)' })],  // 量取自證交所，非 Yahoo
