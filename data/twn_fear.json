@@ -228,5 +228,5 @@
 {"d":"2026-11-19","score":3.9,"rating":"極度恐懼","momentum":0.2,"pcr":1.0,"fut":3.0,"spot10":16.2,"vix":2.0,"margin":1.1},
 {"d":"2026-11-20","score":5.2,"rating":"極度恐懼","momentum":0.2,"pcr":0.2,"fut":3.8,"spot10":26.3,"vix":0.7,"margin":0.2},
 {"d":"2026-11-23","score":5.7,"rating":"極度恐懼","momentum":0.6,"pcr":0.6,"fut":1.0,"spot10":30.8,"vix":0.7,"margin":0.7},
-{"d":"2026-11-24","score":9.2,"rating":"極度恐懼","momentum":2.6,"pcr":2.6,"fut":1.4,"spot10":30.2}
+{"d":"2026-11-24","score":20.7,"rating":"極度恐懼","momentum":2.6,"pcr":2.6,"fut":1.4,"spot10":30.2,"vix":66.9}
 ]
